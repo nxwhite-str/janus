@@ -2,6 +2,7 @@
 #include <opencv2/highgui/highgui.hpp>
 
 #include "iarpa_janus_io.h"
+#include "../janus_io.cpp"
 
 using namespace cv;
 
