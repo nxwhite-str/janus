@@ -13,7 +13,7 @@ const char *get_ext(const char *filename) {
 
 void printUsage()
 {
-    printf("Usage: janus_create_gallery sdk_path temp_path data_path metadata_file gallery_file [-algorithm <algorithm>] [-verbose]\n");
+    printf("Usage: janus_create_gallery sdk_path temp_path templates_directory template_list_file flat_gallery_file [-algorithm <algorithm>] [-tuning_data <csvfile>] [-tuning_data_path <image dir>]\n");
 }
 
 int main(int argc, char *argv[])
@@ -26,46 +26,41 @@ int main(int argc, char *argv[])
     }
 
     const char *ext1 = get_ext(argv[4]);
-    const char *ext2 = get_ext(argv[5]);
     if (strcmp(ext1, "csv") != 0) {
-        printf("metadata_file must be \".csv\" format.\n");
+        printf("template_list_file must be \".csv\" format.\n");
         return 1;
-    } else if (strcmp(ext2, "gal") != 0) {
-        printf("gallery_file must be \".gal\" format. \n");
-        return 1;
-    }
-
+    } 
+    
     char *algorithm = NULL;
-    int verbose = 0;
+    char *tuning_csvfile = NULL;
+    char *img_path = NULL;
 
     for (int i=0; i<argc-requiredArgs; i++)
         if (strcmp(argv[requiredArgs+i],"-algorithm") == 0)
             algorithm = argv[requiredArgs+(++i)];
-        else if (strcmp(argv[requiredArgs+i],"-verbose") == 0)
-            verbose = 1;
+	else if (strcmp(argv[requiredArgs+i], "-tuning_data") == 0)
+            tuning_csvfile = argv[requiredArgs+(++i)];
+	else if (strcmp(argv[requiredArgs+i], "-tuning_data_path") == 0)
+            img_path = argv[requiredArgs+(++i)];
         else {
             fprintf(stderr, "Unrecognized flag: %s\n", argv[requiredArgs+i]);
             return 1;
         }
 
-    JANUS_ASSERT(janus_initialize(argv[1], argv[2], algorithm))
-
+    JANUS_ASSERT(janus_initialize(argv[1], argv[2], algorithm, 0))
+    JANUS_ASSERT(janus_set_tuning_data(img_path, tuning_csvfile))
+    
     janus_gallery gallery;
     JANUS_ASSERT(janus_allocate_gallery(&gallery))
 
-    JANUS_ASSERT(janus_create_gallery(argv[3], argv[4], gallery, verbose))
+    int size;
+    JANUS_ASSERT(janus_create_gallery(argv[3], argv[4], gallery, &size))
 
-    janus_metrics metrics = janus_get_metrics();
-    size_t size = metrics.janus_initialize_template_speed.count;
     janus_flat_gallery flat_gallery = new janus_data[size*janus_max_template_size()];
     size_t bytes;
+    
     JANUS_ASSERT(janus_flatten_gallery(gallery, flat_gallery, &bytes))
-    std::ofstream file;
-    file.open(argv[5], std::ios::out | std::ios::binary);
-    file.write((char*)flat_gallery, bytes);
-    file.close();
+    JANUS_ASSERT(janus_write_flat_gallery(argv[5], flat_gallery))
     JANUS_ASSERT(janus_finalize())
-
-    janus_print_metrics(metrics);
     return EXIT_SUCCESS;
 }

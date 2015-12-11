@@ -11,3 +11,10 @@ Janus
     $ cd build
     $ cmake ..
     $ make
+
+# Run Test Scripts
+    $ cd ../scripts
+    $ ./run_verification.sh
+    $ ./run_search.sh
+ 
+

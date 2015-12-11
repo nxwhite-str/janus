@@ -274,28 +274,38 @@ janus_error janus_create_template(const char *data_path, janus_metadata metadata
 
 #ifndef JANUS_CUSTOM_CREATE_TEMPLATES
 
-janus_error janus_create_templates(const char *data_path, janus_metadata metadata, const char *gallery_file, int verbose)
+janus_error janus_create_templates(const char *data_path, janus_metadata metadata, const char *templates_path, const char *template_list_file, const char* flat_template_list_file, int verbose)
 {
     TemplateIterator ti(metadata, true);
     janus_template template_;
     janus_template_id templateID;
     TemplateData templateData = ti.next();
-    std::ofstream file;
-    file.open(gallery_file, std::ios::out | std::ios::binary | std::ios::ate);
+    std::ofstream templ_list_file;
+    std::ofstream flat_templ_list_file;
+    templ_list_file.open(template_list_file, std::ios::out | std::ios::ate);
+    flat_templ_list_file.open(flat_template_list_file, std::ios::out | std::ios::ate);
     while (!templateData.templateIDs.empty()) {
         JANUS_CHECK(TemplateIterator::create(data_path, templateData, &template_, &templateID, verbose))
+
+	char templateIDstr[10];
+	sprintf(templateIDstr, "%d", templateID);
+	JANUS_CHECK(janus_write_template((templates_path + string(templateIDstr) + ".template").c_str(), template_))
+	templ_list_file << templateIDstr << "," << (string(templateIDstr) + ".template") << "\n";
+
         janus_flat_template flat_template_ = new janus_data[janus_max_template_size()];
         size_t bytes;
         JANUS_CHECK(janus_flatten_template(template_, flat_template_, &bytes))
-        JANUS_CHECK(janus_free_template(template_))
-        file.write((char*)&templateID, sizeof(templateID));
-        file.write((char*)&bytes, sizeof(bytes));
-        file.write((char*)flat_template_, bytes);
 
+	JANUS_CHECK(janus_write_flat_template((templates_path + string(templateIDstr) + ".flat_template").c_str(), flat_template_))
+	flat_templ_list_file << templateIDstr << "," << (string(templateIDstr) + ".flat_template") << "\n";	
+        
+	JANUS_CHECK(janus_free_template(template_))
+	
         delete[] flat_template_;
         templateData = ti.next();
     }
-    file.close();
+    templ_list_file.close();
+    flat_templ_list_file.close();
     return JANUS_SUCCESS;
 }
 
@@ -303,18 +313,27 @@ janus_error janus_create_templates(const char *data_path, janus_metadata metadat
 
 #ifndef JANUS_CUSTOM_CREATE_GALLERY
 
-janus_error janus_create_gallery(const char *data_path, janus_metadata metadata, janus_gallery gallery, int verbose)
+janus_error janus_create_gallery(const char *data_path, const char *templates_list_file, janus_gallery gallery, int *num_templates)
 {
-    TemplateIterator ti(metadata, true);
-    janus_template template_;
-    janus_template_id templateID;
-    TemplateData templateData = ti.next();
-    while (!templateData.templateIDs.empty()) {
-        JANUS_CHECK(TemplateIterator::create(data_path, templateData, &template_, &templateID, verbose))
-        JANUS_CHECK(janus_enroll(template_, templateID, gallery))
+    ifstream file(templates_list_file);
+    string line;
+  
+    *num_templates = 0; 
+    while (getline(file,line)) {
+	istringstream row(line);
+	string templ_id, template_file;
+	getline(row, templ_id, ',');
+	getline(row, template_file, ',');
+    	janus_template_id templateID = atoi(templ_id.c_str());
+    	janus_template template_;
+       
+	JANUS_CHECK(janus_read_template((data_path + template_file).c_str(), &template_))
+	JANUS_CHECK(janus_enroll(template_, templateID, gallery))
         JANUS_CHECK(janus_free_template(template_))
-        templateData = ti.next();
+       
+	(*num_templates)++;
     }
+    file.close();
     return JANUS_SUCCESS;
 }
 

@@ -187,19 +187,21 @@ JANUS_EXPORT janus_error janus_create_template(const char *data_path, janus_meta
  * \brief High-level function for enrolling templates from a metadata file and writing templates to disk.
  * \param [in] data_path Prefix path to files in metadata.
  * \param [in] metadata #janus_metadata to enroll.
- * \param [in] gallery_file File to save the gallery to.
+ * \param [in] templates_path Prefix path to output template files.
+ * \param [in] template_list_file File to save template ID and template file name to.
+ * \param [in] flat_template_list_file File to save the flat template ID and flat template file name to.
  * \param [in] verbose Print information and warnings during gallery enrollment.
  */
-JANUS_EXPORT janus_error janus_create_templates(const char *data_path, janus_metadata metadata, const char *gallery_file, int verbose);
+JANUS_EXPORT janus_error janus_create_templates(const char *data_path, janus_metadata metadata, const char *templates_path, const char *template_list_file, const char *flat_template_list_file, int verbose);
 
 /*!
  * \brief High-level function for enrolling a gallery from a metadata file.
- * \param [in] data_path Prefix path to files in metadata.
- * \param [in] metadata #janus_metadata to enroll.
+ * \param [in] data_path Prefix path to templates in template_list_file.
+ * \param [in] templates_list_file Input file with list of template IDs and template files 
  * \param [in] gallery File to save the templates to.
- * \param [in] verbose Print information and warnings during gallery enrollment.
+ * \param [out] num_templates The number of enrolled templates in the gallery.
  */
-JANUS_EXPORT janus_error janus_create_gallery(const char *data_path, janus_metadata metadata, janus_gallery gallery, int verbose);
+JANUS_EXPORT janus_error janus_create_gallery(const char *data_path, const char *templates_list_file, janus_gallery gallery, int *num_templates);
 
 /*!
  * \brief A dense binary 2D matrix file.

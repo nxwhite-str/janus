@@ -450,7 +450,7 @@ JANUS_EXPORT janus_error janus_initialize(const char *sdk_path,
 
 /*!
  * \brief Called once before template generation and gallery construction 
- *
+ * \param[in] imagedir Directory where media referred to by csvfile is stored on disk
  * \param[in] csvfile 	Comma-delimited metadata file, identical to 25 column 
  * 			“train.csv” files present in CS2 splits.
  * \remark Implementors must handle the case where csvfile = NULL 

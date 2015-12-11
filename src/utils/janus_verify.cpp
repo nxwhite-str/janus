@@ -1,29 +1,16 @@
 #include <stdlib.h>
 #include <string.h>
+#include <fstream>
+#include <sstream>
 
 #include "iarpa_janus.h"
 #include "iarpa_janus_io.h"
 
-const char *get_ext(const char *filename) {
-    const char *dot = strrchr(filename, '.');
-    if (!dot || dot == filename) return "";
-    return dot + 1;
-}
+using namespace std;
 
 void printUsage()
 {
-    printf("Usage: janus_verify sdk_path temp_path data_path target_metadata_file query_metadata_file [-algorithm <algorithm>]\n");
-}
-
-static janus_flat_template getFlatTemplate(const char *data_path, janus_metadata metadata, size_t *bytes)
-{
-    janus_template template_;
-    janus_template_id template_id;
-    JANUS_ASSERT(janus_create_template(data_path, metadata, &template_, &template_id))
-    janus_flat_template flat_template = new janus_data[janus_max_template_size()];
-    JANUS_ASSERT(janus_flatten_template(template_, flat_template, bytes))
-    JANUS_ASSERT(janus_free_template(template_))
-    return flat_template;
+    printf("Usage: janus_verify sdk_path temp_path template_dir template_pairs_file scores_file [-algorithm <algorithm>]\n");
 }
 
 int main(int argc, char *argv[])
@@ -32,14 +19,6 @@ int main(int argc, char *argv[])
 
     if ((argc < requiredArgs) || (argc > 8)) {
         printUsage();
-        return 1;
-    }
-
-    const char *ext1 = get_ext(argv[4]);
-    const char *ext2 = get_ext(argv[5]);
-
-    if (strcmp(ext1, "csv") != 0 || strcmp(ext2, "csv") != 0) {
-        printf("Metadata files must be \".csv\" format\n");
         return 1;
     }
 
@@ -52,23 +31,33 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-    JANUS_ASSERT(janus_initialize(argv[1], argv[2], algorithm))
+    JANUS_ASSERT(janus_initialize(argv[1], argv[2], algorithm, 0))
 
-    size_t target_bytes;
-    janus_flat_template target_flat = getFlatTemplate(argv[3], argv[4], &target_bytes);
-    printf("Target bytes: %zu\n", target_bytes);
+    ifstream infile(argv[4]);
+    ofstream outfile(argv[5]);
+    string line;
+    
+    while (getline(infile,line)) {
+	istringstream row(line);
+        string enrolltempl, veriftempl;
+        getline(row, enrolltempl, ',');
+        getline(row, veriftempl, ',');
+	janus_flat_template enroll_flat_template;
+	janus_flat_template verif_flat_template;
+	size_t enroll_flat_templ_size;
+	size_t verif_flat_templ_size;
 
-    size_t query_bytes;
-    janus_flat_template query_flat = getFlatTemplate(argv[3], argv[5], &query_bytes);
-    printf("Query bytes: %zu\n", query_bytes);
+	JANUS_ASSERT(janus_read_flat_template((argv[3] + enrolltempl + ".flat_template").c_str(), &enroll_flat_template, &enroll_flat_templ_size))
+	JANUS_ASSERT(janus_read_flat_template((argv[3] + veriftempl + ".flat_template").c_str(), &verif_flat_template, &verif_flat_templ_size))
 
-    float similarity;
-    JANUS_ASSERT(janus_verify(target_flat, target_bytes, query_flat, query_bytes, &similarity))
-    printf("Similarity: %g\n", similarity);
-
-    delete[] target_flat;
-    delete[] query_flat;
-
+	float similarity;
+        JANUS_ASSERT(janus_verify(enroll_flat_template, enroll_flat_templ_size, verif_flat_template, verif_flat_templ_size, &similarity))	
+	outfile << enrolltempl << "," << veriftempl << "," << similarity << "\n";
+        JANUS_ASSERT(janus_free_flat_template(enroll_flat_template))
+        JANUS_ASSERT(janus_free_flat_template(verif_flat_template))
+    }        
+    infile.close();
+    outfile.close();
     JANUS_ASSERT(janus_finalize())
     return EXIT_SUCCESS;
 }
