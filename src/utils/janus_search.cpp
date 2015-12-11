@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
 {
     int requiredArgs = 8;
 
-    if ((argc < requiredArgs) || (argc > 9)) {
+    if ((argc < requiredArgs) || (argc > 11)) {
         printUsage();
         return 1;
     }

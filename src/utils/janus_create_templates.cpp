@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
 {
     int requiredArgs = 8;
 
-    if ((argc < requiredArgs) || (argc > 11)) {
+    if ((argc < requiredArgs) || (argc > 13)) {
         printUsage();
         return 1;
     }
