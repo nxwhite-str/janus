@@ -42,11 +42,14 @@ int main(int argc, char *argv[])
     size_t flat_gallery_size;
 
     JANUS_ASSERT(janus_read_flat_gallery(argv[3], &flat_gallery, &flat_gallery_size))
-    
+
     ifstream probesfile(argv[5]);
     ofstream candlistfile(argv[7]);
     string line;
-  
+
+    const char* header = "SEARCH_TEMPLATE_ID CANDIDATE_RANK ENROLL_TEMPLATE_ID ENROLL_TEMPLATE_SIZE_BYTES SEARCH_TEMPLATE_SIZE_BYTES RETCODE SIMILARITY_SCORE";
+
+    candlistfile << header << endl;
     while (getline(probesfile,line)) {
     	istringstream row(line);
  	string templ_id, template_file;
@@ -56,20 +59,26 @@ int main(int argc, char *argv[])
 	janus_flat_template flat_template;
 	size_t flat_template_size;
 	janus_template_id *template_ids = new janus_template_id[num_requested_returns];
-	float* similarities = new float[num_requested_returns];	
+	float* similarities = new float[num_requested_returns];
 	int num_actual_returns;
 
 	JANUS_ASSERT(janus_read_flat_template((argv[4] + template_file).c_str(), &flat_template, &flat_template_size))
-	JANUS_ASSERT(janus_search(flat_template, flat_template_size, flat_gallery, flat_gallery_size, num_requested_returns, template_ids, similarities, &num_actual_returns))	
+	JANUS_ASSERT(janus_search(flat_template, flat_template_size, flat_gallery, flat_gallery_size, num_requested_returns, template_ids, similarities, &num_actual_returns))
 	JANUS_ASSERT(janus_free_flat_template(flat_template));
-	
+
 	for(int i=0; i < num_actual_returns; i++) {
-		candlistfile << templ_id << "," << i << "," << template_ids[i] << "," << similarities[i] << "\n";	
+		candlistfile << templ_id
+      << " " << i
+      << " " << template_ids[i]
+      << " " << flat_template_size
+      << " " << flat_template_size
+      << " " << JANUS_SUCCESS
+      << " " << similarities[i] << endl;
 	}
 
 	delete[] template_ids;
 	delete[] similarities;
-    }    
+    }
 
     probesfile.close();
     candlistfile.close();
