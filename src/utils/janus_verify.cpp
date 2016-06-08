@@ -31,8 +31,11 @@ int main(int argc, char *argv[])
             return 1;
         }
 
-    JANUS_ASSERT(janus_initialize(argv[1], argv[2], algorithm, 0))
+    JANUS_ASSERT(janus_initialize(argv[1], argv[2], algorithm, 0));
 
+#if 1
+    JANUS_ASSERT(janus_new_verify(argv[3], argv[4], argv[5]));
+#else
     ifstream infile(argv[4]);
     ofstream outfile(argv[5]);
     string line;
@@ -67,6 +70,11 @@ int main(int argc, char *argv[])
     }
     infile.close();
     outfile.close();
-    JANUS_ASSERT(janus_finalize())
+#endif
+
+    JANUS_ASSERT(janus_finalize());
+
+    janus_print_metrics(janus_get_metrics());
+
     return EXIT_SUCCESS;
 }

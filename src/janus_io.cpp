@@ -567,6 +567,98 @@ janus_error janus_evaluate_verify(const char *target, const char *query, janus_m
     return JANUS_SUCCESS;
 }
 
+janus_error janus_new_verify(const char* template_dir, const char* ifn, const char* ofn) {
+    ifstream infile(ifn);
+    ofstream outfile(ofn);
+    string line;
+
+    const char* header="ENROLL_TEMPLATE_ID VERIF_TEMPLATE_ID ENROLL_TEMPLATE_SIZE_BYTES VERIF_TEMPLATE_SIZE_BYTES RETCODE SIMILARITY_SCORE";
+
+    outfile << header << endl;
+
+    while (getline(infile,line)) {
+      istringstream row(line);
+      string enrolltempl, veriftempl;
+      getline(row, enrolltempl, ',');
+      getline(row, veriftempl, ',');
+      janus_flat_template enroll_flat_template;
+      janus_flat_template verif_flat_template;
+      size_t enroll_flat_templ_size;
+      size_t verif_flat_templ_size;
+
+      JANUS_ASSERT(janus_read_flat_template((template_dir + enrolltempl + ".flat_template").c_str(), &enroll_flat_template, &enroll_flat_templ_size));
+      JANUS_ASSERT(janus_read_flat_template((template_dir + veriftempl + ".flat_template").c_str(), &verif_flat_template, &verif_flat_templ_size));
+
+      float similarity;
+      const clock_t start = clock();
+      JANUS_CHECK(janus_verify(enroll_flat_template, enroll_flat_templ_size, verif_flat_template, verif_flat_templ_size, &similarity))
+      _janus_add_sample(janus_verify_samples, 1000.0 * (clock() - start) / CLOCKS_PER_SEC);
+      outfile << enrolltempl
+        << " " << veriftempl
+        << " " << enroll_flat_templ_size
+        << " " << verif_flat_templ_size
+        << " " << JANUS_SUCCESS
+        << " " << similarity << endl;
+      JANUS_ASSERT(janus_free_flat_template(enroll_flat_template))
+      JANUS_ASSERT(janus_free_flat_template(verif_flat_template))
+    }
+    infile.close();
+    outfile.close();
+    return JANUS_SUCCESS;
+}
+
+janus_error janus_new_search(const char* gal_fn, const char* template_dir, const char* probes_fn, const char* num_ret_str, const char* candlist_fn) {
+  int num_requested_returns = atoi(num_ret_str);
+  janus_flat_gallery flat_gallery;
+  size_t flat_gallery_size;
+
+  JANUS_ASSERT(janus_read_flat_gallery(gal_fn, &flat_gallery, &flat_gallery_size));
+
+  ifstream probesfile(probes_fn);
+  ofstream candlistfile(candlist_fn);
+  string line;
+
+  const char* header = "SEARCH_TEMPLATE_ID CANDIDATE_RANK ENROLL_TEMPLATE_ID ENROLL_TEMPLATE_SIZE_BYTES SEARCH_TEMPLATE_SIZE_BYTES RETCODE SIMILARITY_SCORE";
+
+  candlistfile << header << endl;
+  while (getline(probesfile,line)) {
+    istringstream row(line);
+    string templ_id, template_file;
+    getline(row, templ_id, ',');
+    getline(row, template_file, ',');
+
+    janus_flat_template flat_template;
+    size_t flat_template_size;
+    janus_template_id *template_ids = new janus_template_id[num_requested_returns];
+    float* similarities = new float[num_requested_returns];
+    int num_actual_returns;
+
+    JANUS_ASSERT(janus_read_flat_template((template_dir + template_file).c_str(), &flat_template, &flat_template_size));
+    clock_t start = clock();
+    JANUS_ASSERT(janus_search(flat_template, flat_template_size, flat_gallery, flat_gallery_size, num_requested_returns, template_ids, similarities, &num_actual_returns));
+    _janus_add_sample(janus_search_samples, 1000.0 * (clock() - start) / CLOCKS_PER_SEC);
+    JANUS_ASSERT(janus_free_flat_template(flat_template));
+
+    for(int i=0; i < num_actual_returns; i++) {
+      candlistfile << templ_id
+        << " " << i
+        << " " << template_ids[i]
+        << " " << flat_template_size
+        << " " << flat_template_size
+        << " " << JANUS_SUCCESS
+        << " " << similarities[i] << endl;
+    }
+
+    delete[] template_ids;
+    delete[] similarities;
+  }
+
+  probesfile.close();
+  candlistfile.close();
+  JANUS_ASSERT(janus_free_flat_gallery(flat_gallery));
+  return JANUS_SUCCESS;
+}
+
 static janus_metric calculateMetric(const vector<double> &samples)
 {
     janus_metric metric;

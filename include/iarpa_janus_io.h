@@ -252,6 +252,10 @@ JANUS_EXPORT janus_error janus_evaluate_search(janus_flat_gallery target, size_t
  */
 JANUS_EXPORT janus_error janus_evaluate_verify(const char *target, const char *query, janus_metadata target_metadata, janus_metadata query_metadata, janus_matrix simmat, janus_matrix mask);
 
+// NLC: Move new verify/search code into janus_io.cpp
+JANUS_EXPORT janus_error janus_new_verify(const char* template_dir, const char* ifn, const char* ofn);
+JANUS_EXPORT janus_error janus_new_search(const char* gal_fn, const char* template_dir, const char* probes_fn, const char* num_ret_str, const char* candlist_fn);
+
 /*!
  * \brief A statistic.
  * \see janus_metrics
