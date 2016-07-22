@@ -576,7 +576,22 @@ janus_error janus_new_verify(const char* template_dir, const char* ifn, const ch
 
     outfile << header << endl;
 
+    size_t num_matches = 0;
+    // getline(infile,line); // no header
     while (getline(infile,line)) {
+      ++num_matches;
+    }
+
+    infile.clear();
+    infile.seekg(0);
+
+    // getline(infile,line); // no header
+    size_t match_progress = 0;
+    while (getline(infile,line)) {
+      ++match_progress;
+      if (match_progress % 100 == 0) {
+        cout << match_progress << "/" << num_matches << endl;
+      }
       istringstream row(line);
       string enrolltempl, veriftempl;
       getline(row, enrolltempl, ',');

@@ -4,7 +4,27 @@
 #include "../janus_io.cpp"
 #include "iarpa_janus_io.h"
 
+#include <ctime>
+
 using namespace cv;
+
+class log_function final {
+  public:
+    log_function(string name) : mName(name), start(clock()) {}
+
+    ~log_function() {
+      cout << "[" << mName << "] complete in "
+        << (1000.0 * (clock() - start) / CLOCKS_PER_SEC)
+        << " ms" << endl;
+    }
+
+    log_function(log_function&) = delete;
+    log_function& operator=(log_function&) = delete;
+
+  private:
+    std::string mName;
+    clock_t start;
+};
 
 static janus_image janusFromOpenCV(const Mat &mat)
 {
@@ -20,6 +40,7 @@ static janus_image janusFromOpenCV(const Mat &mat)
 
 janus_error janus_read_image(const char *file_name, janus_image *image)
 {
+    log_function lf("janus_read_image:"+string(file_name));
     const Mat mat = imread(file_name);
     if (!mat.data) {
         fprintf(stderr, "Fatal - Janus failed to read: %s\n", file_name);
@@ -31,6 +52,7 @@ janus_error janus_read_image(const char *file_name, janus_image *image)
 
 void janus_free_image(janus_image image)
 {
+    log_function lf("janus_free_image");
     free(image.data);
 }
 
