@@ -4,17 +4,18 @@
 #include "../janus_io.cpp"
 #include "iarpa_janus_io.h"
 
-#include <ctime>
+#include <time.h>
 
 using namespace cv;
 
 class log_function final {
   public:
-    log_function(string name) : mName(name), start(clock()) {}
+    log_function(string name) : mName(name), start(now_seconds()) {}
 
     ~log_function() {
+      auto finish = now_seconds();
       cout << "[" << mName << "] complete in "
-        << (1000.0 * (clock() - start) / CLOCKS_PER_SEC)
+        << (1000.0 * (finish-start))
         << " ms" << endl;
     }
 
@@ -22,8 +23,19 @@ class log_function final {
     log_function& operator=(log_function&) = delete;
 
   private:
+
+    inline double now_seconds() {
+      constexpr auto BILLION = 1000000000L;
+
+      // NOTE: Not supported by Mac OS X
+      struct timespec tv;
+      clock_gettime(CLOCK_MONOTONIC_RAW, &tv);
+      auto res = static_cast<double>(static_cast<int64_t>(tv.tv_sec) * BILLION + tv.tv_nsec) / BILLION;
+      return res;
+    }
+
     std::string mName;
-    clock_t start;
+    double start;
 };
 
 static janus_image janusFromOpenCV(const Mat &mat)
