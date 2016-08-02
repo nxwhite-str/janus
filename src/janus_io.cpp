@@ -12,6 +12,7 @@
 #include <vector>
 #include <set>
 #include <assert.h>
+#include <iterator>
 
 #include <iarpa_janus_io.h>
 
@@ -558,6 +559,18 @@ janus_error janus_search_helper(const string &probes_list_file, const string &ga
     _janus_add_sample(janus_deserialize_gallery_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
 
     ofstream candidate_stream(candidate_list_file.c_str(), ios::out | ios::ate);
+    std::vector<std::string> headers = {
+      "SEARCH_TEMPLATE_ID",
+      "CANDIDATE_RANK",
+      "ENROLL_TEMPLATE_ID",
+      "SIMILARITY_SCORE",
+      "PROBE_SUBJECT_ID",
+      "GALLERY_SUBJECT_ID",
+      "Y",
+    };
+
+    copy(begin(headers), end(headers), ostream_iterator<string>(candidate_stream, " "));
+    candidate_stream << endl;
     for (size_t i = 0; i < probe_templates.size(); i++) {
         vector<janus_template_id> return_template_ids;
         vector<double> similarities;
@@ -567,9 +580,15 @@ janus_error janus_search_helper(const string &probes_list_file, const string &ga
 
         janus_ensure_size(gallery_template_ids, return_template_ids, similarities);
 
+        // for (size_t j = 0; j < return_template_ids.size(); j++)
+        //     candidate_stream << probe_template_ids[i] << "," << j << "," << return_template_ids[j] << "," << similarities[j]
+        //                      << "," << (probe_subject_ids[i] == subjectIDLUT[return_template_ids[j]] ? "true" : "false") << "\n";
+
         for (size_t j = 0; j < return_template_ids.size(); j++)
-            candidate_stream << probe_template_ids[i] << "," << j << "," << return_template_ids[j] << "," << similarities[j]
-                             << "," << (probe_subject_ids[i] == subjectIDLUT[return_template_ids[j]] ? "true" : "false") << "\n";
+            candidate_stream << probe_template_ids[i] << " " << j << " " << return_template_ids[j] << " " << similarities[j]
+                             << " " << probe_subject_ids[i]
+                             << " " << subjectIDLUT[return_template_ids[j]]
+                             << " " << (probe_subject_ids[i] == subjectIDLUT[return_template_ids[j]] ? "1.0" : "0.0") << "\n";
 
         start = clock();
         JANUS_CHECK(janus_delete_template(probe_templates[i]))
