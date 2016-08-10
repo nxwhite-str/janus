@@ -117,9 +117,12 @@ janus_error janus_detect_helper(const string &data_path, janus_metadata metadata
     ifstream file(metadata);
     ofstream output(detection_list_file);
 
+    output << "FILENAME,FACE_X,FACE_Y,FACE_WIDTH,FACE_HEIGHT,DETECTION_CONFIDENCE" << endl;
+
     // Parse the header
     string line;
-    getline(file, line);
+    // NLC: No header on CS3 face detection csv file
+    // getline(file, line);
 
     while (getline(file, line)) {
         istringstream attributes(line);
