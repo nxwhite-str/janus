@@ -123,8 +123,17 @@ janus_error janus_detect_helper(const string &data_path, janus_metadata metadata
     string line;
     // NLC: No header on CS3 face detection csv file
     // getline(file, line);
-
+    size_t num_faces = 0;
     while (getline(file, line)) {
+      ++num_faces;
+    }
+
+    file.clear();
+    file.seekg(0);
+
+    size_t face_cnt = 0;
+    while (getline(file, line)) {
+        cout << "[janus_detect_helper]: " << ++face_cnt  << "/" << num_faces << endl;
         istringstream attributes(line);
         string filename;
         getline(attributes, filename, ',');
