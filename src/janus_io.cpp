@@ -159,6 +159,10 @@ janus_error janus_detect_helper(const string &data_path, janus_metadata metadata
             continue;
         }
 
+        start = clock();
+        JANUS_ASSERT(janus_free_media(media));
+        _janus_add_sample(janus_free_media_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+
         for (size_t i = 0; i < tracks.size(); i++) {
             const janus_track &track = tracks[i];
             for (size_t j = 0; j < track.track.size(); j++) {
