@@ -9,7 +9,16 @@ using namespace cv;
 
 janus_error janus_load_media(const string &filename, janus_media &media)
 {
-    Mat img = imread(filename);
+  // FIXME: OpenCV 3.1 cv::imread()  uses EXIF rototion data to automatically rotate an image
+  // This breaks some CS3 ground truth annotations
+  // cvLoadImage ignores EXIF as a 'feature'
+    // Mat img = imread(filename);
+    CvMat* pmat = cvLoadImageM(filename.c_str());
+    cv::Mat img;
+    if (pmat) {
+      img = cv::Mat(pmat->rows, pmat->cols, CV_8UC3, pmat->data.fl);
+    }
+
     if (!img.data) { // Couldn't load as an image maybe it's a video
         VideoCapture video(filename);
         if (!video.isOpened()) {
@@ -40,6 +49,8 @@ janus_error janus_load_media(const string &filename, janus_media &media)
     janus_data *data = new janus_data[media.width * media.height * (media.color_space == JANUS_BGR24 ? 3 : 1)];
     memcpy(data, img.data, media.width * media.height * (media.color_space == JANUS_BGR24 ? 3 : 1));
     media.data.push_back(data);
+
+    cvReleaseMat(&pmat);
 
     return JANUS_SUCCESS;
 }

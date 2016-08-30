@@ -18,7 +18,7 @@ const char *get_ext(const char *filename) {
 
 void printUsage()
 {
-    printf("Usage: janus_evaluate_search sdk_path temp_path probes_list_file gallery_list_file gallery_file num_requested_returns candidate_list_file [-algorithm <algorithm>] [-verbose]\n");
+    printf("Usage: janus_search sdk_path temp_path probes_list_file gallery_list_file gallery_file num_requested_returns candidate_list_file [-algorithm <algorithm>] [-verbose]\n");
 }
 
 int main(int argc, char *argv[])

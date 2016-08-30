@@ -12,13 +12,13 @@ const char *get_ext(const char *filename) {
 
 void printUsage()
 {
-    printf("Usage: janus_create_templates sdk_path temp_path data_path metadata_file templates_dir template_list_file template_role [-algorithm <algorithm>] [-verbose]\n");
+    printf("Usage: janus_create_templates sdk_path temp_path data_path metadata_file templates_dir template_list_file template_role [-gpuindex <index>] [-algorithm <algorithm>] [-verbose]\n");
 }
 
 int main(int argc, char *argv[])
 {
     int requiredArgs = 8;
-    if ((argc < requiredArgs) || (argc > 12)) {
+    if ((argc < requiredArgs) || (argc > 14)) {
         printUsage();
         return 1;
     }
@@ -32,10 +32,13 @@ int main(int argc, char *argv[])
     // char *algorithm = "";
     std::string algorithm;
     bool verbose = false;
+    int gpu_index = 0;
 
     for (int i = 0; i < argc - requiredArgs; i++) {
         if (strcmp(argv[requiredArgs+i],"-algorithm") == 0)
             algorithm = argv[requiredArgs+(++i)];
+        else if (strcmp(argv[requiredArgs+i],"-gpuindex") == 0)
+            gpu_index = atoi(argv[requiredArgs+(++i)]);
         else if (strcmp(argv[requiredArgs+i],"-verbose") == 0)
             verbose = true;
         else {
@@ -44,7 +47,7 @@ int main(int argc, char *argv[])
         }
     }
 
-    JANUS_ASSERT(janus_initialize(argv[1], argv[2], algorithm, 0))
+    JANUS_ASSERT(janus_initialize(argv[1], argv[2], algorithm, gpu_index))
     JANUS_ASSERT(janus_create_templates_helper(argv[3], argv[4], argv[5], argv[6], static_cast<janus_template_role>(atoi(argv[7])), verbose))
     JANUS_ASSERT(janus_finalize())
 

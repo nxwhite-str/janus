@@ -281,6 +281,11 @@ struct TemplateIterator : public TemplateData
                 else if (header[j] == "SKIN_TONE")
                     track.skin_tone = value;
             }
+            cout << "[TemplateIterator]: attributes face x/y/w/h: "
+              << attributes.face_x << "/"
+              << attributes.face_y << "/"
+              << attributes.face_width << "/"
+              << attributes.face_height << endl;
             track.track.push_back(attributes);
             tracks.push_back(track);
         }
@@ -310,6 +315,8 @@ struct TemplateIterator : public TemplateData
     static janus_error create(const string &data_path, const TemplateData templateData, const janus_template_role role, janus_template *template_, janus_template_id *templateID, bool verbose)
     {
         clock_t start;
+        *templateID = templateData.templateIDs[0];
+        cout << "[TemplateIterator::create]: TemplateID " << templateID << endl;
 
         // A set to hold all of the media and metadata required to make a full template
         vector<janus_association> associations;
@@ -319,7 +326,9 @@ struct TemplateIterator : public TemplateData
             janus_media media;
 
             start = clock();
-            JANUS_ASSERT(janus_load_media(data_path + templateData.filenames[i], media))
+            const string media_path = data_path + templateData.filenames[i];
+            cout << "[TemplateIterator::create]: Loading file: " << media_path << endl;
+            JANUS_ASSERT(janus_load_media(media_path, media))
             _janus_add_sample(janus_load_media_samples, 1000.0 * (clock() - start) / CLOCKS_PER_SEC);
 
             janus_association association;
@@ -354,7 +363,6 @@ struct TemplateIterator : public TemplateData
             _janus_add_sample(janus_free_media_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
         }
 
-        *templateID = templateData.templateIDs[0];
         return JANUS_SUCCESS;
     }
 
@@ -392,6 +400,7 @@ janus_error janus_create_templates_helper(const string &data_path, janus_metadat
         // Serialize the template to a file.
         ofstream template_stream(templateOutputFile.c_str(), ios::out | ios::binary);
         start = clock();
+        cout << "[janus_create_templates_helper] serializing " << templateIDString << endl;
         JANUS_CHECK(janus_serialize_template(template_, template_stream));
         _janus_add_sample(janus_serialize_template_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
         template_stream.close();
@@ -438,6 +447,7 @@ static janus_error janus_load_templates_from_file(const string &templates_list_f
         ifstream template_stream(template_file.c_str(), ios::in | ios::binary);
         janus_template template_ = NULL;
         start = clock();
+        cout << "[janus_load_templates_from_file] deserializing " << template_id << endl;
         JANUS_CHECK(janus_deserialize_template(template_, template_stream));
         _janus_add_sample(janus_deserialize_template_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
         template_stream.close();
@@ -589,6 +599,7 @@ janus_error janus_search_helper(const string &probes_list_file, const string &ga
     copy(begin(headers), end(headers), ostream_iterator<string>(candidate_stream, " "));
     candidate_stream << endl;
     for (size_t i = 0; i < probe_templates.size(); i++) {
+        cout << "[janus_search_helper]: probe template id: " << probe_template_ids[i] << endl;
         vector<janus_template_id> return_template_ids;
         vector<double> similarities;
         start = clock();
@@ -601,11 +612,13 @@ janus_error janus_search_helper(const string &probes_list_file, const string &ga
         //     candidate_stream << probe_template_ids[i] << "," << j << "," << return_template_ids[j] << "," << similarities[j]
         //                      << "," << (probe_subject_ids[i] == subjectIDLUT[return_template_ids[j]] ? "true" : "false") << "\n";
 
-        for (size_t j = 0; j < return_template_ids.size(); j++)
+        for (size_t j = 0; j < return_template_ids.size(); j++) {
             candidate_stream << probe_template_ids[i] << " " << j << " " << return_template_ids[j] << " " << similarities[j]
                              << " " << probe_subject_ids[i]
                              << " " << subjectIDLUT[return_template_ids[j]]
                              << " " << (probe_subject_ids[i] == subjectIDLUT[return_template_ids[j]] ? "1.0" : "0.0") << "\n";
+            candidate_stream.flush();
+        }
 
         start = clock();
         JANUS_CHECK(janus_delete_template(probe_templates[i]))
