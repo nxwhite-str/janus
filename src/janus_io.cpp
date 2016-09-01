@@ -517,16 +517,34 @@ janus_error janus_verify_helper(const string &templates_list_file_a, const strin
 
     assert(templates_a.size() == templates_b.size());
 
+    cout << "[janus_verify_helper]: Have template counts a/b: " << templates_a.size() << "/" << templates_b.size() << endl;
+
     // Compare the templates and write the results to the scores file
     ofstream scores_stream(scores_file.c_str(), ios::out | ios::ate);
+
+    // IJB-A header
+    scores_stream << "ENROLL_TEMPLATE_ID VERIF_TEMPLATE_ID ENROLL_TEMPLATE_SIZE_BYTES VERIF_TEMPLATE_SIZE_BYTES RETCODE SIMILARITY_SCORE" << endl;
+
+    // 27JUL16_datacall header
+    // scores_stream << "TEMPLATE_ID1,TEMPLATE_ID2,ERROR_CODE,SCORE,COMPARISON_TYPE,VERIFY_TIME,DESERIALIZE_TEMPLATE_ID1_TIME,DESERIALIZE_TEMPLATE_ID2_TIME" << endl;
+
     for (size_t i = 0; i < templates_a.size(); i++) {
         double similarity;
         start = clock();
-        janus_verify(templates_a[i], templates_b[i], similarity);
-        _janus_add_sample(janus_verify_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+        auto& template_a = templates_a[i];
+        auto& template_b = templates_b[i];
+        auto res = janus_verify(template_a, template_b, similarity);
+        const auto duration = 1000 * (clock() - start) / CLOCKS_PER_SEC;
+        _janus_add_sample(janus_verify_samples, duration);
 
-        scores_stream << template_ids_a[i] << "," << template_ids_b[i] << "," << similarity << ","
-                      << (subject_ids_a[i] == subject_ids_b[i] ? "true" : "false") << "\n";
+        scores_stream << template_ids_a[i]
+                      << " " << template_ids_b[i]
+                      << " " << 32800 // FIXME
+                      << " " << 32800 // FIXME
+                      << " " << res
+                      << " " << similarity
+                      // << " " << (subject_ids_a[i] == subject_ids_b[i] ? "true" : "false") // FIXME
+                      << endl;
     }
     scores_stream.close();
 
