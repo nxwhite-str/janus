@@ -426,6 +426,45 @@ janus_error janus_create_templates_helper(const string &data_path, janus_metadat
 
 #endif // JANUS_CUSTOM_CREATE_TEMPLATES
 
+static janus_error janus_load_template_map_from_file(const string &templates_list_file, map<janus_template_id,janus_template> &templates, vector<janus_template_id> &template_ids, vector<int> &subject_ids)
+{
+    clock_t start;
+
+    ifstream templates_list_stream(templates_list_file.c_str());
+    string line;
+
+    while (getline(templates_list_stream, line)) {
+        istringstream row(line);
+        string template_id, subject_id, template_file;
+        getline(row, template_id, ',');
+        getline(row, subject_id, ',');
+        getline(row, template_file, ',');
+
+        template_ids.push_back(atoi(template_id.c_str()));
+        subject_ids.push_back(atoi(subject_id.c_str()));
+
+        stringstream ss;
+        ss << template_id;
+        size_t tid;
+        ss >> tid;
+        if (templates.find(tid) == templates.end()) {
+          // Load the serialized template from disk
+          ifstream template_stream(template_file.c_str(), ios::in | ios::binary);
+          janus_template template_ = NULL;
+          start = clock();
+          cout << "[janus_load_template_map_from_file] deserializing " << template_id << endl;
+          JANUS_CHECK(janus_deserialize_template(template_, template_stream));
+          _janus_add_sample(janus_deserialize_template_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+          template_stream.close();
+
+          templates[tid] = template_;
+        }
+    }
+    templates_list_stream.close();
+
+    return JANUS_SUCCESS;
+}
+
 static janus_error janus_load_templates_from_file(const string &templates_list_file, vector<janus_template> &templates, vector<janus_template_id> &template_ids, vector<int> &subject_ids)
 {
     clock_t start;
@@ -508,16 +547,17 @@ janus_error janus_verify_helper(const string &templates_list_file_a, const strin
     clock_t start;
 
     // Load the template sets
-    vector<janus_template> templates_a, templates_b;
+    // vector<janus_template> templates_a, templates_b;
+    map<janus_template_id, janus_template> templates_a, templates_b;
     vector<janus_template_id> template_ids_a, template_ids_b;
     vector<int> subject_ids_a, subject_ids_b;
 
-    JANUS_CHECK(janus_load_templates_from_file(templates_list_file_a, templates_a, template_ids_a, subject_ids_a));
-    JANUS_CHECK(janus_load_templates_from_file(templates_list_file_b, templates_b, template_ids_b, subject_ids_b));
+    JANUS_CHECK(janus_load_template_map_from_file(templates_list_file_a, templates_a, template_ids_a, subject_ids_a));
+    JANUS_CHECK(janus_load_template_map_from_file(templates_list_file_b, templates_b, template_ids_b, subject_ids_b));
 
     assert(templates_a.size() == templates_b.size());
 
-    cout << "[janus_verify_helper]: Have template counts a/b: " << templates_a.size() << "/" << templates_b.size() << endl;
+    cout << "[janus_verify_helper]: Have template counts a/b: " << template_ids_a.size() << "/" << template_ids_b.size() << endl;
 
     // Compare the templates and write the results to the scores file
     ofstream scores_stream(scores_file.c_str(), ios::out | ios::ate);
@@ -528,11 +568,19 @@ janus_error janus_verify_helper(const string &templates_list_file_a, const strin
     // 27JUL16_datacall header
     // scores_stream << "TEMPLATE_ID1,TEMPLATE_ID2,ERROR_CODE,SCORE,COMPARISON_TYPE,VERIFY_TIME,DESERIALIZE_TEMPLATE_ID1_TIME,DESERIALIZE_TEMPLATE_ID2_TIME" << endl;
 
-    for (size_t i = 0; i < templates_a.size(); i++) {
+    for (size_t i = 0; i < template_ids_a.size(); i++) {
+        janus_template_id tid_a, tid_b;
+        stringstream ss;
+        ss << template_ids_a[i];
+        ss >> tid_a;
+        ss.clear();
+        ss << template_ids_b[i];
+        ss >> tid_b;
+
         double similarity;
         start = clock();
-        auto& template_a = templates_a[i];
-        auto& template_b = templates_b[i];
+        auto& template_a = templates_a[tid_a];
+        auto& template_b = templates_b[tid_b];
         auto res = janus_verify(template_a, template_b, similarity);
         const auto duration = 1000 * (clock() - start) / CLOCKS_PER_SEC;
         _janus_add_sample(janus_verify_samples, duration);
