@@ -192,6 +192,7 @@ struct TemplateData
 {
     vector<string> filenames;
     vector<janus_template_id> templateIDs;
+    vector<int> sightingIDs;
     map<janus_template_id, int> subjectIDLUT;
     vector<janus_track> tracks;
 
@@ -200,7 +201,24 @@ struct TemplateData
         filenames.clear();
         templateIDs.clear();
         subjectIDLUT.clear();
+        sightingIDs.clear();
         tracks.clear();
+    }
+
+    void report() const {
+      cout << "[TemplateData::report]:";
+      for (size_t i=0; i<templateIDs.size(); ++i) {
+        auto& attributes = tracks[i].track[0];
+          cout << endl << "\tfile:[" << filenames[i]  << "]"
+          << " template_id:[" << templateIDs[i] << "]"
+          << " sighting_id:[" << sightingIDs[i] << "]"
+          << " attributes face x/y/w/h: "
+          << attributes.face_x << "/"
+          << attributes.face_y << "/"
+          << attributes.face_width << "/"
+          << attributes.face_height;
+      }
+      cout << endl;
     }
 };
 
@@ -223,8 +241,13 @@ struct TemplateIterator : public TemplateData
         getline(attributeNames, attributeName, ','); // SUBJECT_ID
         getline(attributeNames, attributeName, ','); // FILE_NAME
         vector<string> header;
-        while (getline(attributeNames, attributeName, ','))
-            header.push_back(attributeName);
+        bool has_media_id = false;
+        while (getline(attributeNames, attributeName, ',')) {
+          if (attributeName == "MEDIA_ID") {
+            has_media_id = true;
+          }
+          header.push_back(attributeName);
+        }
 
         // Parse rows
         while (getline(file, line)) {
@@ -242,7 +265,14 @@ struct TemplateIterator : public TemplateData
             janus_attributes attributes;
             for (int j = 0; getline(attributeValues, attributeValue, ','); j++) {
                 double value = attributeValue.empty() ? NAN : atof(attributeValue.c_str());
-                if (header[j] == "FRAME_NUMBER")
+                if (header[j] == "MEDIA_ID") {
+                  sightingIDs.push_back(int(value));
+                } else if (header[j] == "SIGHTING_ID" and (not has_media_id)) {
+                  sightingIDs.push_back(int(value));
+                }
+                else if (header[j] == "FRAME_NUMBER")
+                    attributes.frame_number = value;
+                else if (header[j] == "FRAME")
                     attributes.frame_number = value;
                 else if (header[j] == "FACE_X")
                     attributes.face_x = value;
@@ -281,7 +311,11 @@ struct TemplateIterator : public TemplateData
                 else if (header[j] == "SKIN_TONE")
                     track.skin_tone = value;
             }
-            cout << "[TemplateIterator]: attributes face x/y/w/h: "
+            cout << "[TemplateIterator]:"
+              << " file:[" << filenames.back() << "]"
+              << " template_id:[" << templateIDs.back() << "]"
+              << " sighting_id:[" << sightingIDs.back() << "]"
+              << " attributes face x/y/w/h: "
               << attributes.face_x << "/"
               << attributes.face_y << "/"
               << attributes.face_width << "/"
@@ -303,6 +337,7 @@ struct TemplateIterator : public TemplateData
             while ((i < tracks.size()) && (templateIDs[i] == templateID)) {
                 templateData.templateIDs.push_back(templateIDs[i]);
                 templateData.filenames.push_back(filenames[i]);
+                templateData.sightingIDs.push_back(sightingIDs[i]);
                 templateData.tracks.push_back(tracks[i]);
                 i++;
             }
@@ -312,58 +347,106 @@ struct TemplateIterator : public TemplateData
         return templateData;
     }
 
+    // FIXME: Handle mp4 media
     static janus_error create(const string &data_path, const TemplateData templateData, const janus_template_role role, janus_template *template_, janus_template_id *templateID, bool verbose)
     {
-        clock_t start;
-        *templateID = templateData.templateIDs[0];
-        cout << "[TemplateIterator::create]: TemplateID " << templateID << endl;
+      clock_t start;
+      *templateID = templateData.templateIDs[0];
+      cout << "[TemplateIterator::create]: TemplateID " << (*templateID) << " ims+frames: " << templateData.templateIDs.size() << endl;
+      cout << "[TemplateIterator::create]: ";
+      templateData.report();
 
-        // A set to hold all of the media and metadata required to make a full template
-        vector<janus_association> associations;
+      // A set to hold all of the media and metadata required to make a full template
+      vector<janus_association> associations;
 
-        // Create a set of all the media used for this template
-        for (size_t i = 0; i < templateData.templateIDs.size(); i++) {
-            janus_media media;
+      // Create a set of all the media used for this template
+      for (size_t i = 0; i < templateData.templateIDs.size(); /* ++i */) {
+        const int sighting_id = templateData.sightingIDs[i];
+        janus_media media;
+        janus_track track;
 
-            start = clock();
-            const string media_path = data_path + templateData.filenames[i];
-            cout << "[TemplateIterator::create]: Loading file: " << media_path << endl;
-            JANUS_ASSERT(janus_load_media(media_path, media))
-            _janus_add_sample(janus_load_media_samples, 1000.0 * (clock() - start) / CLOCKS_PER_SEC);
-
-            janus_association association;
-            association.media = media;
-            association.metadata = templateData.tracks[i];
-            associations.push_back(association);
+        // Look ahead to the next media
+        size_t j = i+1;
+        for (/* */; j < templateData.templateIDs.size(); ++j) {
+          const int next_sighting_id = templateData.sightingIDs[j];
+          // cout << "j: " << j << " s: " << sighting_id << " sj: " << next_sighting_id << endl;
+          if (next_sighting_id != sighting_id) {
+            break;
+          }
         }
 
-        // Create the template
+        cout << "i: " << i << " j: " << j << endl;
+
+        for (/* */; i < j; ++i) {
+          cout << "i: " << i << endl;
+          cout << "sighting_id: " << sighting_id << endl;
+          const string media_path = data_path + templateData.filenames[i];
+          cout << "[TemplateIterator::create]: Loading file: " << media_path << endl;
+          janus_media single_media;
+          start = clock();
+          JANUS_ASSERT(janus_load_media(media_path, single_media));
+          _janus_add_sample(janus_load_media_samples, 1000.0 * (clock() - start) / CLOCKS_PER_SEC);
+
+          if (media.data.empty()) {
+            media.width = single_media.width;
+            media.height = single_media.height;
+            media.color_space = single_media.color_space;
+          }
+
+          cout << "debug: data len: " << single_media.data.size() << endl;
+          cout << "debug: trak len: " << templateData.tracks[i].track.size() << endl;
+
+          media.data.push_back(single_media.data[0]);
+          track.track.push_back(templateData.tracks[i].track[0]);
+          cout << "image w/h: " << media.width << "/" << media.height << endl;
+
+          auto xmin = track.track.back().face_x;
+          auto ymin = track.track.back().face_y;
+          auto width = track.track.back().face_width;
+          auto height = track.track.back().face_height;
+          auto xmax = xmin + width;
+          auto ymax = ymin + height;
+
+          cout << "bbox: x/y w/h xmax/ymax: "
+            << " " << xmin << "/" << ymin
+            << " " << width << "/" << height
+            << " " << xmax << "/" << ymax
+            << endl;
+        }
+
+        janus_association association;
+        association.media = media;
+        association.metadata = track;
+        associations.push_back(association);
+      }
+
+      // Create the template
+      start = clock();
+      janus_error error = janus_create_template(associations, role, *template_);
+      _janus_add_sample(janus_create_template_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+
+      // Check the result for errors
+      if (error == JANUS_MISSING_ATTRIBUTES) {
+        janus_missing_attributes_count++;
+        if (verbose)
+          printf("Missing attributes for: %s\n", templateData.filenames[0].c_str());
+      } else if (error == JANUS_FAILURE_TO_ENROLL) {
+        janus_failure_to_enroll_count++;
+        if (verbose)
+          printf("Failure to enroll: %s\n", templateData.filenames[0].c_str());
+      } else if (error != JANUS_SUCCESS) {
+        janus_other_errors_count++;
+        printf("Warning: %s on: %s\n", janus_error_to_string(error),templateData.filenames[0].c_str());
+      }
+
+      // Free the media
+      for (size_t i = 0; i < associations.size(); i++) {
         start = clock();
-        janus_error error = janus_create_template(associations, role, *template_);
-        _janus_add_sample(janus_create_template_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+        JANUS_ASSERT(janus_free_media(associations[i].media));
+        _janus_add_sample(janus_free_media_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+      }
 
-        // Check the result for errors
-        if (error == JANUS_MISSING_ATTRIBUTES) {
-            janus_missing_attributes_count++;
-            if (verbose)
-                printf("Missing attributes for: %s\n", templateData.filenames[0].c_str());
-        } else if (error == JANUS_FAILURE_TO_ENROLL) {
-            janus_failure_to_enroll_count++;
-            if (verbose)
-                printf("Failure to enroll: %s\n", templateData.filenames[0].c_str());
-        } else if (error != JANUS_SUCCESS) {
-            janus_other_errors_count++;
-            printf("Warning: %s on: %s\n", janus_error_to_string(error),templateData.filenames[0].c_str());
-        }
-
-        // Free the media
-        for (size_t i = 0; i < associations.size(); i++) {
-            start = clock();
-            JANUS_ASSERT(janus_free_media(associations[i].media));
-            _janus_add_sample(janus_free_media_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
-        }
-
-        return JANUS_SUCCESS;
+      return JANUS_SUCCESS;
     }
 
     ~TemplateIterator() { release(); }
@@ -452,7 +535,7 @@ static janus_error janus_load_template_map_from_file(const string &templates_lis
           ifstream template_stream(template_file.c_str(), ios::in | ios::binary);
           janus_template template_ = NULL;
           start = clock();
-          cout << "[janus_load_template_map_from_file] deserializing " << template_id << endl;
+          cout << "[janus_load_template_map_from_file] deserializing " << template_id << ": " << template_file << endl;
           JANUS_CHECK(janus_deserialize_template(template_, template_stream));
           _janus_add_sample(janus_deserialize_template_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
           template_stream.close();
