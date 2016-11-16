@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include <opencv2/highgui/highgui.hpp>
 
 #include "../janus_io.cpp"
@@ -9,15 +10,35 @@ using namespace cv;
 
 janus_error janus_load_media(const string &filename, janus_media &media)
 {
-  // FIXME: OpenCV 3.1 cv::imread()  uses EXIF rototion data to automatically rotate an image
-  // This breaks some CS3 ground truth annotations
-  // cvLoadImage ignores EXIF as a 'feature'
-    // Mat img = imread(filename);
-    CvMat* pmat = cvLoadImageM(filename.c_str());
+    // NLC HACK: OpenCV doesn't read gifs, so use converted replacement file
+    string fixed_filename(filename);
+    const size_t gpos = fixed_filename.find(".gif") != string::npos ?
+      fixed_filename.find(".gif") : fixed_filename.find(".GIF");
+
+    if (gpos != string::npos) {
+      fixed_filename.replace(gpos, 4, ".jpg");
+    }
+    //
+    // FIXME: OpenCV 3.1 cv::imread()  uses EXIF rototion data to automatically rotate an image
+    // This breaks some CS3 ground truth annotations
+    // cvLoadImage ignores EXIF as a 'feature'
+    CvMat* pmat = cvLoadImageM(fixed_filename.c_str());
     cv::Mat img;
     if (pmat) {
       img = cv::Mat(pmat->rows, pmat->cols, CV_8UC3, pmat->data.fl);
     }
+
+    // NLC END HACK
+
+#if 0
+    // NLC DEBUG IMG
+    static size_t img_cnt = 0;
+    stringstream dbg_img_fn;
+    dbg_img_fn << "opencv_io_" << (img_cnt++) << ".png";
+    imwrite(dbg_img_fn.str(), img);
+    /// END NLC DEBUG IMG
+#endif
+
 
     if (!img.data) { // Couldn't load as an image maybe it's a video
         VideoCapture video(filename);
