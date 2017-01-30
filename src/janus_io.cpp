@@ -92,6 +92,7 @@ static vector<double> janus_deserialize_gallery_samples;
 static vector<double> janus_delete_serialized_gallery_samples;
 static vector<double> janus_delete_gallery_samples;
 static vector<double> janus_search_samples;
+static vector<double> janus_cluster_samples;
 static int janus_missing_attributes_count = 0;
 static int janus_failure_to_detect_count = 0;
 static int janus_failure_to_enroll_count = 0;
@@ -232,48 +233,85 @@ struct TemplateIterator : public TemplateData
     {
         ifstream file(metadata);
 
+        bool has_subject_id = false;
         // Parse header
         string line;
         getline(file, line);
         istringstream attributeNames(line);
         string attributeName;
         getline(attributeNames, attributeName, ','); // TEMPLATE_ID
-        getline(attributeNames, attributeName, ','); // SUBJECT_ID
-        getline(attributeNames, attributeName, ','); // FILE_NAME
+        getline(attributeNames, attributeName, ','); // SUBJECT_ID or FILENAME
+        if (attributeName == "SUBJECT_ID") {
+          has_subject_id = true;
+          getline(attributeNames, attributeName, ','); // FILENAME
+        }
         vector<string> header;
         bool has_media_id = false;
+        bool has_sighting_id = false;
         while (getline(attributeNames, attributeName, ',')) {
+          // HACK: trim whitespace
+          stringstream ss;
+          ss << attributeName;
+          attributeName.clear();
+          ss >> attributeName;
           if (attributeName == "MEDIA_ID") {
             has_media_id = true;
+          } else if (attributeName == "SIGHTING_ID") {
+            has_sighting_id = true;
           }
           header.push_back(attributeName);
         }
 
         // Parse rows
+        int sid = 0;
         while (getline(file, line)) {
             istringstream attributeValues(line);
             string templateID, subjectID, filename, attributeValue;
             getline(attributeValues, templateID, ',');
-            getline(attributeValues, subjectID, ',');
+            if (has_subject_id) {
+              getline(attributeValues, subjectID, ',');
+              stringstream ss;
+              ss << sid++;
+              subjectID = ss.str();
+              subjectIDLUT.insert(make_pair(atoi(templateID.c_str()), atoi(subjectID.c_str())));
+            } else {
+              subjectIDLUT.insert(make_pair(atoi(templateID.c_str()), atoi(templateID.c_str()))); // HACK
+            }
             getline(attributeValues, filename, ',');
             templateIDs.push_back(atoi(templateID.c_str()));
-            subjectIDLUT.insert(make_pair(atoi(templateID.c_str()), atoi(subjectID.c_str())));
             filenames.push_back(filename);
 
             // Construct a track from the metadata
             janus_track track;
             janus_attributes attributes;
             for (int j = 0; getline(attributeValues, attributeValue, ','); j++) {
+                stringstream ss;
+                ss << attributeValue;
+                attributeValue.clear();
+                ss >> attributeValue;
+                // cout << "WTF? " << header[j] << endl;
                 double value = attributeValue.empty() ? NAN : atof(attributeValue.c_str());
                 if (header[j] == "MEDIA_ID") {
                   sightingIDs.push_back(int(value));
                 } else if (header[j] == "SIGHTING_ID" and (not has_media_id)) {
                   sightingIDs.push_back(int(value));
                 }
-                else if (header[j] == "FRAME_NUMBER")
+                else if (header[j] == "FRAME_NUMBER") {
                     attributes.frame_number = value;
-                else if (header[j] == "FRAME")
+                    cout << "DEBUG: found FRAME_NUMBER: " << attributes.frame_number << endl;
+                }
+                else if (header[j] == "FRAME_NUM") {
                     attributes.frame_number = value;
+                    cout << "DEBUG: found FRAME_NUM: " << attributes.frame_number << endl;
+                }
+                else if (header[j] == "FRAME_NUM\n") {
+                    attributes.frame_number = value;
+                    cout << "DEBUG: found FRAME_NUM\\n: " << attributes.frame_number << endl;
+                }
+                else if (header[j] == "FRAME") {
+                    attributes.frame_number = value;
+                    cout << "DEBUG: found FRAME: " << attributes.frame_number << endl;
+                }
                 else if (header[j] == "FACE_X")
                     attributes.face_x = value;
                 else if (header[j] == "FACE_Y")
@@ -310,6 +348,9 @@ struct TemplateIterator : public TemplateData
                     track.age = value;
                 else if (header[j] == "SKIN_TONE")
                     track.skin_tone = value;
+            }
+            if (not (has_media_id || has_sighting_id)) {
+              sightingIDs.push_back(atoi(templateID.c_str()));
             }
             cout << "[TemplateIterator]:"
               << " file:[" << filenames.back() << "]"
@@ -397,8 +438,15 @@ struct TemplateIterator : public TemplateData
           cout << "debug: trak len: " << templateData.tracks[i].track.size() << endl;
 
           media.data.push_back(single_media.data[0]);
-          track.track.push_back(templateData.tracks[i].track[0]);
-          cout << "image w/h: " << media.width << "/" << media.height << endl;
+
+          auto&& attr = templateData.tracks[i].track[0];
+          if (std::isnan(attr.face_x)) {
+            // HACK: Skip any ground truth items with NaN bounding boxes to support video protocols
+            continue;
+          }
+
+          track.track.push_back(attr);
+          cout << "image w/h/fn: " << media.width << "/" << media.height << "/" << attr.frame_number << endl;
 
           auto xmin = track.track.back().face_x;
           auto ymin = track.track.back().face_y;
@@ -470,8 +518,8 @@ janus_error janus_create_templates_helper(const string &data_path, janus_metadat
 
     TemplateData templateData = ti.next();
     while (!templateData.templateIDs.empty()) {
-        JANUS_CHECK(TemplateIterator::create(data_path, templateData, role, &template_, &templateID, verbose))
-
+        // FIXME: HACK to skip templates that already exist on disk
+        templateID = templateData.templateIDs[0];
         // Useful strings
         char templateIDBuffer[10], subjectIDBuffer[10];
         sprintf(templateIDBuffer, "%zu", templateID);
@@ -479,6 +527,20 @@ janus_error janus_create_templates_helper(const string &data_path, janus_metadat
         sprintf(subjectIDBuffer, "%d", templateData.subjectIDLUT[templateID]);
         const string subjectIDString(subjectIDBuffer);
         const string templateOutputFile = templates_path + templateIDString + ".template";
+
+#if 0
+        {
+          // Check if exists
+          ifstream template_stream(templateOutputFile.c_str(), ios::in | ios::binary);
+          if (template_stream.good()) {
+            cout << "Skipping existing templatefile: " << templateOutputFile << endl;
+            templateData = ti.next();
+            continue;
+          }
+        }
+#endif
+
+        JANUS_CHECK(TemplateIterator::create(data_path, templateData, role, &template_, &templateID, verbose));
 
         // Serialize the template to a file.
         ofstream template_stream(templateOutputFile.c_str(), ios::out | ios::binary);
@@ -783,6 +845,52 @@ janus_error janus_search_helper(const string &probes_list_file, const string &ga
 
 #endif // JANUS_CUSTOM_SEARCH
 
+#ifndef JANUS_CUSTOM_CLUSTER
+janus_error janus_cluster_helper(const string &templates_list_file, const size_t hint, const string &clusters_output_list, bool verbose)
+{
+    clock_t start;
+
+    vector<janus_template> cluster_templates;
+    vector<janus_template_id> cluster_template_ids;
+    vector<int> cluster_subject_ids;
+
+    vector<cluster_pair> cluster_pairs;
+
+    // load templates
+    JANUS_CHECK(janus_load_templates_from_file(templates_list_file,
+                                               cluster_templates,
+                                               cluster_template_ids,
+                                               cluster_subject_ids));
+
+    // perform clustering
+    start = clock();
+    JANUS_CHECK(janus_cluster(cluster_templates, hint, cluster_pairs));
+    _janus_add_sample(janus_cluster_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+
+    // write results and delete templates
+    ofstream cluster_stream(clusters_output_list.c_str(), ios::out | ios::ate);
+    for (size_t i=0; i < cluster_templates.size(); i++) {
+        // write a row
+        cluster_stream << cluster_template_ids[i] << ","
+                       << cluster_subject_ids[i]  << ","
+                       << cluster_pairs[i].first  << ","
+                       << cluster_pairs[i].second << std::endl;
+
+        // delete templates
+        start = clock();
+        JANUS_CHECK(janus_delete_template(cluster_templates[i]))
+        _janus_add_sample(janus_delete_template_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+    }
+
+    cluster_stream.close();
+
+    if (verbose)
+        janus_print_metrics(janus_get_metrics());
+
+    return JANUS_SUCCESS;
+}
+#endif // JANUS_CUSTOM_SEARCH
+
 static janus_metric calculateMetric(const vector<double> &samples)
 {
     janus_metric metric;
@@ -829,6 +937,7 @@ janus_metrics janus_get_metrics()
     metrics.janus_delete_serialized_gallery_speed  = calculateMetric(janus_delete_serialized_gallery_samples);
     metrics.janus_delete_gallery_speed             = calculateMetric(janus_delete_gallery_samples);
     metrics.janus_search_speed                     = calculateMetric(janus_search_samples);
+    metrics.janus_cluster_speed                    = calculateMetric(janus_cluster_samples);
     metrics.janus_missing_attributes_count         = janus_missing_attributes_count;
     metrics.janus_failure_to_enroll_count          = janus_failure_to_enroll_count;
     metrics.janus_other_errors_count               = janus_other_errors_count;
@@ -864,6 +973,7 @@ void janus_print_metrics(janus_metrics metrics)
     printMetric(stderr, "janus_delete_serialized_gallery ", metrics.janus_delete_serialized_gallery_speed);
     printMetric(stderr, "janus_delete_gallery            ", metrics.janus_delete_gallery_speed);
     printMetric(stderr, "janus_search                    ", metrics.janus_search_speed);
+    printMetric(stderr, "janus_cluster                   ", metrics.janus_cluster_speed);
     fprintf(stderr,     "\n\n");
     fprintf(stderr,     "janus_error                     \tCount\n");
     fprintf(stderr,     "JANUS_MISSING_ATTRIBUTES        \t%d\n", metrics.janus_missing_attributes_count);
