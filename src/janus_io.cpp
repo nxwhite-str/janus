@@ -837,6 +837,9 @@ janus_error janus_search_helper(const string &probes_list_file, const string &ga
     }
     candidate_stream.close();
 
+    JANUS_CHECK(janus_delete_gallery(gallery));
+    _janus_add_sample(janus_delete_gallery_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+
     if (verbose)
         janus_print_metrics(janus_get_metrics());
 
