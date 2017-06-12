@@ -117,6 +117,7 @@ janus_error janus_detect_helper(const string &data_path, janus_metadata metadata
 
     ifstream file(metadata);
     ofstream output(detection_list_file);
+    output.precision(15);
 
     output << "FILENAME,FACE_X,FACE_Y,FACE_WIDTH,FACE_HEIGHT,DETECTION_CONFIDENCE" << endl;
 
@@ -497,6 +498,72 @@ struct TemplateIterator : public TemplateData
       return JANUS_SUCCESS;
     }
 
+    static janus_error create2(const string &data_path, const TemplateData templateData, const janus_template_role role, vector<janus_template>& templates, vector<janus_track>& tracks)
+    {
+      clock_t start;
+      cout << "[TemplateIterator::create2]: " << endl;
+
+      janus_media media;
+
+      // Create a set of all the media used for this template
+      for (size_t i = 0; i < templateData.templateIDs.size(); /* ++i */) {
+        const int sighting_id = templateData.sightingIDs[i];
+
+        // Look ahead to the next media
+        size_t j = i+1;
+        for (/* */; j < templateData.templateIDs.size(); ++j) {
+          const int next_sighting_id = templateData.sightingIDs[j];
+          // cout << "j: " << j << " s: " << sighting_id << " sj: " << next_sighting_id << endl;
+          if (next_sighting_id != sighting_id) {
+            break;
+          }
+        }
+
+        cout << "i: " << i << " j: " << j << endl;
+
+        for (/* */; i < j; ++i) {
+          cout << "i: " << i << endl;
+          cout << "sighting_id: " << sighting_id << endl;
+          const string media_path = data_path + templateData.filenames[i];
+          cout << "[TemplateIterator::create]: Loading file: " << media_path << endl;
+          janus_media single_media;
+          start = clock();
+          JANUS_ASSERT(janus_load_media(media_path, single_media));
+          _janus_add_sample(janus_load_media_samples, 1000.0 * (clock() - start) / CLOCKS_PER_SEC);
+
+          if (media.data.empty()) {
+            media.width = single_media.width;
+            media.height = single_media.height;
+            media.color_space = single_media.color_space;
+          }
+
+          cout << "debug: data len: " << single_media.data.size() << endl;
+
+          media.data.push_back(single_media.data[0]);
+
+          cout << "image w/h: " << media.width << "/" << media.height << endl;
+
+        }
+      }
+
+      // Create the template
+      start = clock();
+
+      templates.clear();
+      tracks.clear();
+      janus_create_template(media, role, templates, tracks);
+      cout << "TH recieved templates: " << templates.size() << endl;
+      cout << "TH recieved tracks: " << tracks.size() << endl;
+      _janus_add_sample(janus_create_template_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+
+      // Free the media
+      start = clock();
+      JANUS_ASSERT(janus_free_media(media));
+      _janus_add_sample(janus_free_media_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+
+      return JANUS_SUCCESS;
+    }
+
     ~TemplateIterator() { release(); }
 };
 
@@ -535,6 +602,8 @@ janus_error janus_create_templates_helper(const string &data_path, janus_metadat
           if (template_stream.good()) {
             cout << "Skipping existing templatefile: " << templateOutputFile << endl;
             templateData = ti.next();
+            // Write the template metadata to the list
+            templates_list_stream << templateIDString << "," << subjectIDString << "," << templateOutputFile << "\n";
             continue;
           }
         }
@@ -569,6 +638,77 @@ janus_error janus_create_templates_helper(const string &data_path, janus_metadat
     return JANUS_SUCCESS;
 }
 
+
+janus_error janus_create_templates2_helper(const string &data_path, janus_metadata metadata, const string &templates_path, const string &templates_list_file, const janus_template_role role, bool verbose)
+{
+    clock_t start;
+
+    // Create an iterator to loop through the templates
+    TemplateIterator ti(metadata, true);
+
+    // Preallocate some variables
+    janus_template_id templateID = 0;
+
+    // Set up file I/O
+    ofstream templates_list_stream(templates_list_file.c_str(), ios::out | ios::ate);
+    ofstream templates_metadata_stream((templates_list_file+".metadata").c_str(), ios::out | ios::ate);
+    templates_metadata_stream << "TEMPLATE_ID,FILENAME,FACE_X,FACE_Y,FACE_WIDTH,FACE_HEIGHT,DETECTION_CONFIDENCE" << endl;
+
+    TemplateData templateData = ti.next();
+    while (!templateData.templateIDs.empty()) {
+      auto filename = templateData.filenames[0];
+
+      vector<janus_template> templates;
+      vector<janus_track> tracks;
+      JANUS_CHECK(TemplateIterator::create2(data_path, templateData, role, templates, tracks));
+
+      for (size_t k=0; k<templates.size(); ++k) {
+        ++templateID;
+        auto&& template_ = templates[k];
+
+        // Serialize the template to a file.
+        stringstream ss_t_filename;
+        ss_t_filename << templates_path << templateID << ".template";
+
+        ofstream template_stream(ss_t_filename.str(), ios::out | ios::binary);
+
+        start = clock();
+        cout << "[janus_create_templates2_helper] serializing " << templateID << endl;
+        JANUS_CHECK(janus_serialize_template(template_, template_stream));
+        _janus_add_sample(janus_serialize_template_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+        template_stream.close();
+
+        // Write the template metadata to the list
+        templates_list_stream << templateID << "," << ss_t_filename.str() << "\n";
+
+        auto&& track = tracks[k];
+        auto&& det = track.track[0];
+
+        templates_metadata_stream << templateID
+          << "," << filename
+          << "," << det.face_x
+          << "," << det.face_y
+          << "," << det.face_width
+          << "," << det.face_height
+          << "," << track.detection_confidence
+          << endl;
+
+          start = clock();
+        JANUS_CHECK(janus_delete_template(template_));
+        _janus_add_sample(janus_delete_template_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
+      }
+
+      // Move to the next template
+      templateData = ti.next();
+    }
+    templates_list_stream.close();
+    templates_metadata_stream.close();
+
+    if (verbose)
+        janus_print_metrics(janus_get_metrics());
+
+    return JANUS_SUCCESS;
+}
 #endif // JANUS_CUSTOM_CREATE_TEMPLATES
 
 static janus_error janus_load_template_map_from_file(const string &templates_list_file, map<janus_template_id,janus_template> &templates, vector<janus_template_id> &template_ids, vector<int> &subject_ids)
@@ -706,12 +846,14 @@ janus_error janus_verify_helper(const string &templates_list_file_a, const strin
 
     // Compare the templates and write the results to the scores file
     ofstream scores_stream(scores_file.c_str(), ios::out | ios::ate);
+    scores_stream.precision(15); // double precision
 
     // IJB-A header
     scores_stream << "ENROLL_TEMPLATE_ID VERIF_TEMPLATE_ID ENROLL_TEMPLATE_SIZE_BYTES VERIF_TEMPLATE_SIZE_BYTES RETCODE SIMILARITY_SCORE" << endl;
 
     // 27JUL16_datacall header
     // scores_stream << "TEMPLATE_ID1,TEMPLATE_ID2,ERROR_CODE,SCORE,COMPARISON_TYPE,VERIFY_TIME,DESERIALIZE_TEMPLATE_ID1_TIME,DESERIALIZE_TEMPLATE_ID2_TIME" << endl;
+    //
 
     for (size_t i = 0; i < template_ids_a.size(); i++) {
         janus_template_id tid_a, tid_b;
@@ -797,6 +939,7 @@ janus_error janus_search_helper(const string &probes_list_file, const string &ga
     _janus_add_sample(janus_deserialize_gallery_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
 
     ofstream candidate_stream(candidate_list_file.c_str(), ios::out | ios::ate);
+    candidate_stream.precision(15);
     std::vector<std::string> headers = {
       "SEARCH_TEMPLATE_ID",
       "CANDIDATE_RANK",
@@ -872,6 +1015,7 @@ janus_error janus_cluster_helper(const string &templates_list_file, const size_t
 
     // write results and delete templates
     ofstream cluster_stream(clusters_output_list.c_str(), ios::out | ios::ate);
+    cluster_stream.precision(15);
     for (size_t i=0; i < cluster_templates.size(); i++) {
         // write a row
         cluster_stream << cluster_template_ids[i] << ","

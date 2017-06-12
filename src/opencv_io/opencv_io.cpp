@@ -22,10 +22,10 @@ janus_error janus_load_media(const string &filename, janus_media &media)
     // FIXME: OpenCV 3.1 cv::imread()  uses EXIF rototion data to automatically rotate an image
     // This breaks some CS3 ground truth annotations
     // cvLoadImage ignores EXIF as a 'feature'
-    CvMat* pmat = cvLoadImageM(fixed_filename.c_str());
+    CvMat* pmat = cvLoadImageM(fixed_filename.c_str(), -1); // Keep image depth as-is
     cv::Mat img;
     if (pmat) {
-      img = cv::Mat(pmat->rows, pmat->cols, CV_8UC3, pmat->data.fl);
+      img = cv::Mat(pmat->rows, pmat->cols, pmat->type, pmat->data.fl);
     }
 
     // NLC END HACK

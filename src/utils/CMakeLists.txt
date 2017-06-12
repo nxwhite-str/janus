@@ -3,6 +3,7 @@ if(NOT ${JANUS_IMPLEMENTATION} STREQUAL "")
       janus_cluster.cpp
       janus_create_gallery.cpp
       janus_create_templates.cpp
+      janus_create_templates2.cpp
       janus_detect.cpp
       janus_search.cpp
       janus_verify.cpp

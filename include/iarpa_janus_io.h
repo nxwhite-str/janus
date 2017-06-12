@@ -149,6 +149,19 @@ JANUS_EXPORT janus_error janus_detect_helper(const std::string &data_path, janus
  * \param [in] verbose Print information and warnings during template enrollment.
  * \remark This function is \ref thread_unsafe.
  */
+JANUS_EXPORT janus_error janus_create_templates2_helper(const std::string &data_path, janus_metadata metadata, const std::string &templates_path, const std::string &templates_list_file, const janus_template_role role, bool verbose);
+
+/*!
+ * \brief High-level helper function for enrolling templates from a metadata file and writing templates to disk.
+ * \param [in] data_path Prefix path to files in metadata.
+ * \param [in] metadata #janus_metadata to enroll.
+ * \param [in] output_path Directory to save the templates to
+ * \param [in] output_file CSV file to hold the filenames, template ids, and subject_ids for the saved templates.
+ *                         The format is templateID,subjectID,filename\n
+ * \param [in] role The role for the templates
+ * \param [in] verbose Print information and warnings during template enrollment.
+ * \remark This function is \ref thread_unsafe.
+ */
 JANUS_EXPORT janus_error janus_create_templates_helper(const std::string &data_path, janus_metadata metadata, const std::string &templates_path, const std::string &templates_list_file, const janus_template_role role, bool verbose);
 
 /*!
