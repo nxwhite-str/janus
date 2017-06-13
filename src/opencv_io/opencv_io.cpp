@@ -10,7 +10,7 @@ using namespace cv;
 
 janus_error janus_load_media(const string &filename, janus_media &media)
 {
-    // NLC HACK: OpenCV doesn't read gifs, so use converted replacement file
+    // HACK: OpenCV doesn't read gifs, so use converted replacement file
     string fixed_filename(filename);
     const size_t gpos = fixed_filename.find(".gif") != string::npos ?
       fixed_filename.find(".gif") : fixed_filename.find(".GIF");
@@ -27,18 +27,6 @@ janus_error janus_load_media(const string &filename, janus_media &media)
     if (pmat) {
       img = cv::Mat(pmat->rows, pmat->cols, pmat->type, pmat->data.fl);
     }
-
-    // NLC END HACK
-
-#if 0
-    // NLC DEBUG IMG
-    static size_t img_cnt = 0;
-    stringstream dbg_img_fn;
-    dbg_img_fn << "opencv_io_" << (img_cnt++) << ".png";
-    imwrite(dbg_img_fn.str(), img);
-    /// END NLC DEBUG IMG
-#endif
-
 
     if (!img.data) { // Couldn't load as an image maybe it's a video
         VideoCapture video(filename);

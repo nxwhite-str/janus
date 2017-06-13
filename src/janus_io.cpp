@@ -299,19 +299,15 @@ struct TemplateIterator : public TemplateData
                 }
                 else if (header[j] == "FRAME_NUMBER") {
                     attributes.frame_number = value;
-                    cout << "DEBUG: found FRAME_NUMBER: " << attributes.frame_number << endl;
                 }
                 else if (header[j] == "FRAME_NUM") {
                     attributes.frame_number = value;
-                    cout << "DEBUG: found FRAME_NUM: " << attributes.frame_number << endl;
                 }
                 else if (header[j] == "FRAME_NUM\n") {
                     attributes.frame_number = value;
-                    cout << "DEBUG: found FRAME_NUM\\n: " << attributes.frame_number << endl;
                 }
                 else if (header[j] == "FRAME") {
                     attributes.frame_number = value;
-                    cout << "DEBUG: found FRAME: " << attributes.frame_number << endl;
                 }
                 else if (header[j] == "FACE_X")
                     attributes.face_x = value;
