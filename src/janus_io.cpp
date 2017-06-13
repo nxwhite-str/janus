@@ -652,7 +652,7 @@ janus_error janus_create_templates2_helper(const string &data_path, janus_metada
     // Set up file I/O
     ofstream templates_list_stream(templates_list_file.c_str(), ios::out | ios::ate);
     ofstream templates_metadata_stream((templates_list_file+".metadata").c_str(), ios::out | ios::ate);
-    templates_metadata_stream << "TEMPLATE_ID,FILENAME,FACE_X,FACE_Y,FACE_WIDTH,FACE_HEIGHT,DETECTION_CONFIDENCE" << endl;
+    templates_metadata_stream << "TEMPLATE_ID,FRAME_NUM,FACE_X,FACE_Y,FACE_WIDTH,FACE_HEIGHT,DETECTION_CONFIDENCE" << endl;
 
     TemplateData templateData = ti.next();
     while (!templateData.templateIDs.empty()) {
@@ -682,16 +682,18 @@ janus_error janus_create_templates2_helper(const string &data_path, janus_metada
         templates_list_stream << templateID << "," << ss_t_filename.str() << "\n";
 
         auto&& track = tracks[k];
-        auto&& det = track.track[0];
+        for (auto&& det: track.track) {
+          // auto&& det = track.track[0];
 
-        templates_metadata_stream << templateID
-          << "," << filename
-          << "," << det.face_x
-          << "," << det.face_y
-          << "," << det.face_width
-          << "," << det.face_height
-          << "," << track.detection_confidence
-          << endl;
+          templates_metadata_stream << templateID
+            << "," << det.frame_number
+            << "," << det.face_x
+            << "," << det.face_y
+            << "," << det.face_width
+            << "," << det.face_height
+            << "," << track.detection_confidence
+            << endl;
+        }
 
           start = clock();
         JANUS_CHECK(janus_delete_template(template_));
