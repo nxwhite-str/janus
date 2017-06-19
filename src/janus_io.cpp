@@ -958,7 +958,8 @@ janus_error janus_search_helper(const string &probes_list_file, const string &ga
         JANUS_CHECK(janus_search(probe_templates[i], gallery, num_requested_returns, return_template_ids, similarities));
         _janus_add_sample(janus_search_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
 
-        janus_ensure_size(gallery_template_ids, return_template_ids, similarities);
+        // FIXME: Not sure why all templates are written out here
+        // janus_ensure_size(gallery_template_ids, return_template_ids, similarities);
 
         // for (size_t j = 0; j < return_template_ids.size(); j++)
         //     candidate_stream << probe_template_ids[i] << "," << j << "," << return_template_ids[j] << "," << similarities[j]
