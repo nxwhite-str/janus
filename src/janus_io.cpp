@@ -127,6 +127,9 @@ janus_error janus_detect_helper(const string &data_path, janus_metadata metadata
     // getline(file, line);
     size_t num_faces = 0;
     while (getline(file, line)) {
+      if (line.find("FILENAME") != string::npos) {
+        continue;
+      }
       ++num_faces;
     }
 
@@ -135,6 +138,9 @@ janus_error janus_detect_helper(const string &data_path, janus_metadata metadata
 
     size_t face_cnt = 0;
     while (getline(file, line)) {
+        if (line.find("FILENAME") != string::npos) {
+          continue;
+        }
         istringstream attributes(line);
         string filename;
         getline(attributes, filename, ',');
@@ -155,16 +161,24 @@ janus_error janus_detect_helper(const string &data_path, janus_metadata metadata
 
         if (error == JANUS_FAILURE_TO_DETECT) {
             janus_failure_to_detect_count++;
-            continue;
+            // continue;  // make sure to free media
         } else if (error != JANUS_SUCCESS) {
             janus_other_errors_count++;
-            continue;
+            // continue;  // make sure to free media
         }
 
         start = clock();
         JANUS_ASSERT(janus_free_media(media));
         _janus_add_sample(janus_free_media_samples, 1000 * (clock() - start) / CLOCKS_PER_SEC);
 
+        if (tracks.empty()) {
+            output << filename << ","
+                   << ","
+                   << ","
+                   << ","
+                   << ","
+                   << endl;
+        }
         for (size_t i = 0; i < tracks.size(); i++) {
             const janus_track &track = tracks[i];
             for (size_t j = 0; j < track.track.size(); j++) {
